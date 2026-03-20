@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Code Formatter & Validator</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23C1692E'/%3E%3Cstop offset='100%25' stop-color='%23B8860B'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='6' fill='url(%23g)'/%3E%3Ctext x='16' y='17' dominant-baseline='central' text-anchor='middle' font-family='monospace' font-weight='bold' font-size='15' fill='white'%3E%7B%20%7D%3C/text%3E%3C/svg%3E"/>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=JetBrains+Mono:wght@300;400;500&family=Lato:wght@300;400;700&display=swap" rel="stylesheet"/>
+  <!-- js-beautify for JS / TS / HTML / CSS formatting -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.14.9/beautify.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.14.9/beautify-css.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.14.9/beautify-html.min.js"></script>
+  <style>
+    :root {
+      --bg-main:        #F6F6F6;
+      --panel-header:   #cddee8;
+      --panel-body:     #F6F6F6;
+      --accent-gold:    #B8860B;
+      --accent-copper:  #C1692E;
+      --accent-warm:    #D4943A;
+      --text-dark:      #1a3a4a;
+      --text-mid:       #2c5a72;
+      --text-light:     #4a7a94;
+      --border-panel:   #e0e0e0;
+      --border-light:   #e8e8e8;
+      --shadow-warm:    rgba(50,100,140,0.10);
+      --error-red:      #C0392B;
+      --error-bg:       #FDEDEC;
+      --lang-active:    #adc5d4;
+
+      /* Syntax highlight colours */
+      --hl-keyword:   #7B3FBB;
+      --hl-string:    #1e7d5c;
+      --hl-comment:   #8a9ba8;
+      --hl-number:    #B9770E;
+      --hl-tag:       #C0392B;
+      --hl-tagname:   #2980B9;
+      --hl-attr:      #7B3F00;
+      --hl-type:      #2980B9;
+      --hl-directive: #E67E22;
+      --hl-selector:  #7B3FBB;
+      --hl-prop:      #2C6E49;
+
+      /* JSON Syntax Colors */
+      --json-key:     #1a4f6e;
+      --json-string:  #1A5276;
+      --json-number:  #B9770E;
+      --json-bool:    #6C3483;
+      --json-null:    #5D7D8A;
+      --json-bracket: #C0392B;
+      --json-comma:   #4a7080;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Lato', sans-serif;
+      background-color: #F6F6F6;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── HEADER ── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 36px;
+      border-bottom: 1px solid rgba(0,0,0,0.08);
+      background: #F6F6F6;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo { display: flex; align-items: center; gap: 12px; }
+
+    .logo-icon {
+      width: 38px; height: 38px;
+      background: linear-gradient(135deg, var(--accent-copper), var(--accent-gold));
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500; font-size: 15px; color: #fff;
+      box-shadow: 0 2px 12px rgba(193,105,46,0.35);
+    }
+
+    .logo-text h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: 20px; font-weight: 700;
+      color: var(--text-dark); letter-spacing: 0.02em; line-height: 1.1;
+    }
+    .logo-text span {
+      font-family: 'Lato', sans-serif; font-size: 11px; font-weight: 300;
+      color: var(--text-light); letter-spacing: 0.15em; text-transform: uppercase;
+    }
+
+    .header-actions { display: flex; gap: 10px; }
+
+    .btn {
+      font-family: 'Lato', sans-serif; font-size: 13px; font-weight: 700;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      padding: 9px 20px; border: none; border-radius: 6px;
+      cursor: pointer; transition: all 0.2s ease;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-copper) 0%, var(--accent-warm) 100%);
+      color: #fff; box-shadow: 0 3px 10px rgba(193,105,46,0.35);
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 5px 18px rgba(193,105,46,0.5); }
+    .btn-primary:active { transform: translateY(0); }
+    .btn-secondary {
+      background: rgba(173,197,212,0.2); color: var(--text-dark);
+      border: 1px solid rgba(100,160,200,0.35);
+    }
+    .btn-secondary:hover { background: rgba(173,197,212,0.4); }
+    .btn-ghost {
+      background: transparent; color: var(--text-mid); border: 1px solid transparent;
+    }
+    .btn-ghost:hover { color: var(--text-dark); border-color: rgba(100,160,200,0.3); }
+
+    /* ── STATUS BAR ── */
+    .status-bar {
+      display: flex; align-items: center; gap: 12px;
+      padding: 8px 36px;
+      background: #F6F6F6;
+      border-bottom: 1px solid rgba(0,0,0,0.07);
+      font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    }
+    .status-badge {
+      display: flex; align-items: center; gap: 6px;
+      padding: 3px 10px; border-radius: 20px;
+      font-size: 11px; font-weight: 500; letter-spacing: 0.05em;
+      transition: all 0.3s ease;
+    }
+    .status-badge.idle    { background: rgba(100,160,200,0.12); color: var(--text-light); }
+    .status-badge.valid   { background: rgba(39,174,96,0.13);   color: #27AE60; }
+    .status-badge.invalid { background: rgba(192,57,43,0.13);   color: var(--error-red); }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .status-info { color: var(--text-light); font-size: 11px; margin-left: auto; }
+
+    /* ── LANGUAGE SELECTOR BAR ── */
+    .lang-bar {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 10px 24px;
+      background: #F6F6F6;
+      border-bottom: 1px solid rgba(0,0,0,0.07);
+      flex-wrap: wrap;
+    }
+    .lang-label {
+      font-family: 'Lato', sans-serif;
+      font-size: 11px; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--text-light);
+      margin-right: 4px;
+      white-space: nowrap;
+    }
+    .lang-btn {
+      font-family: 'Lato', sans-serif;
+      font-size: 12px; font-weight: 600;
+      letter-spacing: 0.05em;
+      padding: 5px 15px;
+      border: 1.5px solid #d8d8d8;
+      border-radius: 20px;
+      background: #fff;
+      color: var(--text-mid);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .lang-btn:hover {
+      border-color: var(--lang-active);
+      color: var(--text-dark);
+      background: rgba(173,197,212,0.1);
+    }
+    .lang-btn.active {
+      background: var(--lang-active);
+      border-color: var(--lang-active);
+      color: #fff;
+    }
+
+    /* ── MAIN LAYOUT ── */
+    main {
+      flex: 1; display: grid; grid-template-columns: 1fr 1fr;
+      gap: 20px; padding: 20px 24px 24px; min-height: 0;
+    }
+
+    /* ── PANELS ── */
+    .panel {
+      display: flex; flex-direction: column;
+      border-radius: 12px; overflow: hidden;
+      border: 1px solid #e0e0e0;
+      box-shadow: 0 4px 30px var(--shadow-warm), 0 1px 0 rgba(255,255,255,0.4) inset;
+    }
+
+    /* Panel body: clean #F6F6F6 */
+    .panel-left, .panel-right {
+      background-color: #F6F6F6;
+    }
+
+    /* Panel header: plain #cddee8, no doodle */
+    .panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 18px;
+      border-bottom: 1px solid rgba(255,255,255,0.4);
+      background-color: #cddee8;
+    }
+
+    .panel-title {
+      display: flex; align-items: center; gap: 8px;
+      font-family: 'Playfair Display', serif;
+      font-size: 14px; font-weight: 600;
+      color: #1a3a4a; letter-spacing: 0.02em;
+    }
+    .panel-icon {
+      width: 22px; height: 22px; border-radius: 5px;
+      display: flex; align-items: center; justify-content: center; font-size: 11px;
+    }
+    .icon-left  { background: linear-gradient(135deg, #C1692E, #D4943A); color: #fff; }
+    .icon-right { background: linear-gradient(135deg, #1a6688, #2a90c0); color: #fff; }
+
+    .panel-actions { display: flex; gap: 6px; align-items: center; }
+
+    .icon-btn {
+      width: 28px; height: 28px;
+      border: 1px solid rgba(255,255,255,0.55);
+      background: rgba(255,255,255,0.45);
+      border-radius: 6px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; color: #1a3a4a;
+      transition: all 0.15s ease; position: relative;
+    }
+    .icon-btn:hover { background: rgba(255,255,255,0.88); border-color: rgba(255,255,255,0.8); }
+    .icon-btn[title]:hover::after {
+      content: attr(title);
+      position: absolute; bottom: -28px; left: 50%; transform: translateX(-50%);
+      background: var(--text-dark); color: #fff;
+      font-size: 10px; padding: 3px 7px; border-radius: 4px;
+      white-space: nowrap; pointer-events: none; z-index: 10;
+    }
+
+    /* ── CLEAR BUTTON ── */
+    .clear-btn {
+      padding: 4px 11px;
+      border: 1.5px solid rgba(255,255,255,0.55);
+      background: rgba(255,255,255,0.45);
+      border-radius: 5px; cursor: pointer;
+      font-family: 'Lato', sans-serif; font-size: 11px; font-weight: 700;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      color: #1a3a4a; transition: all 0.15s ease; line-height: 1.6;
+    }
+    .clear-btn:hover { background: rgba(255,255,255,0.88); }
+    .clear-btn:active { transform: scale(0.97); }
+
+    /* ── PANEL BODY ── */
+    .panel-body { flex: 1; position: relative; display: flex; flex-direction: column; }
+
+    #input-textarea {
+      flex: 1; width: 100%; min-height: 520px;
+      resize: none; border: none; outline: none;
+      padding: 20px;
+      font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.7;
+      color: var(--text-dark); background: transparent;
+      caret-color: var(--accent-copper); tab-size: 2;
+    }
+    #input-textarea::placeholder { color: var(--text-light); opacity: 0.65; }
+    #input-textarea:focus { box-shadow: inset 0 0 0 2px rgba(100,160,200,0.18); }
+
+    /* ── OUTPUT ── */
+    #output-container {
+      flex: 1; min-height: 520px; overflow: auto;
+      padding: 20px; background: transparent;
+    }
+    #output-container::-webkit-scrollbar { width: 6px; height: 6px; }
+    #output-container::-webkit-scrollbar-track { background: transparent; }
+    #output-container::-webkit-scrollbar-thumb { background: #adc5d4; border-radius: 3px; }
+
+    #output-code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px; line-height: 1.8;
+      white-space: pre; color: var(--text-dark);
+    }
+
+    /* ── JSON SYNTAX HIGHLIGHTING ── */
+    .j-key     { color: var(--json-key);     font-weight: 500; }
+    .j-str     { color: var(--json-string);  }
+    .j-num     { color: var(--json-number);  }
+    .j-bool    { color: var(--json-bool);    font-style: italic; }
+    .j-null    { color: var(--json-null);    font-style: italic; }
+    .j-brace   { color: var(--json-bracket); font-weight: 600; }
+    .j-bracket { color: var(--accent-copper); font-weight: 600; }
+    .j-comma   { color: var(--json-comma);   }
+    .j-colon   { color: var(--text-light);   }
+
+    /* ── GENERIC SYNTAX HIGHLIGHTING ── */
+    .hl-keyword   { color: var(--hl-keyword);   font-weight: 600; }
+    .hl-string    { color: var(--hl-string);    }
+    .hl-comment   { color: var(--hl-comment);   font-style: italic; }
+    .hl-number    { color: var(--hl-number);    }
+    .hl-tag       { color: var(--hl-tag);       font-weight: 500; }
+    .hl-tagname   { color: var(--hl-tagname);   font-weight: 600; }
+    .hl-attr      { color: var(--hl-attr);      }
+    .hl-type      { color: var(--hl-type);      font-weight: 500; }
+    .hl-directive { color: var(--hl-directive); }
+    .hl-selector  { color: var(--hl-selector);  font-weight: 500; }
+    .hl-prop      { color: var(--hl-prop);      font-weight: 500; }
+
+    /* ── INDENT CONTROLS ── */
+    .indent-group { display: flex; align-items: center; gap: 4px; }
+    .indent-label {
+      font-size: 11px; color: #1a3a4a; opacity: 0.75;
+      font-family: 'JetBrains Mono', monospace; margin-right: 4px;
+    }
+    .indent-btn {
+      width: 24px; height: 24px;
+      border: 1px solid rgba(255,255,255,0.55);
+      background: rgba(255,255,255,0.4); border-radius: 4px;
+      cursor: pointer; font-size: 13px; font-weight: 700;
+      color: #1a3a4a;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s;
+    }
+    .indent-btn:hover { background: rgba(255,255,255,0.8); }
+    .indent-btn.active { background: var(--accent-warm); color: #fff; border-color: var(--accent-warm); }
+
+    /* ── ERROR / EMPTY STATES ── */
+    .empty-state {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      height: 100%; min-height: 300px; gap: 12px;
+      color: var(--text-mid); opacity: 0.55;
+    }
+    .empty-state-icon { font-size: 36px; opacity: 0.4; }
+    .empty-state p {
+      font-family: 'JetBrains Mono', monospace; font-size: 12px;
+      text-align: center; line-height: 1.6;
+    }
+    .error-state {
+      padding: 16px 20px;
+      background: var(--error-bg);
+      border-left: 3px solid var(--error-red);
+      border-radius: 0 6px 6px 0; margin: 4px 0;
+    }
+    .error-title {
+      font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 500;
+      color: var(--error-red); margin-bottom: 6px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .error-msg { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #922B21; line-height: 1.6; }
+
+    /* ── COPY TOAST ── */
+    .toast {
+      position: fixed; bottom: 28px; left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--text-dark); color: #e8f4fd;
+      font-family: 'JetBrains Mono', monospace; font-size: 13px;
+      padding: 10px 24px; border-radius: 30px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+      transition: transform 0.3s cubic-bezier(.34,1.56,.64,1), opacity 0.3s;
+      opacity: 0; z-index: 999; pointer-events: none;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+    /* ── FOOTER ── */
+    footer {
+      text-align: center; padding: 12px;
+      font-family: 'JetBrains Mono', monospace; font-size: 11px;
+      color: rgba(80,100,120,0.5); letter-spacing: 0.06em;
+      background: #F6F6F6;
+    }
+
+    /* Line numbers */
+    .line-num {
+      display: inline-block; width: 30px;
+      color: rgba(44,90,114,0.35); font-size: 11px;
+      text-align: right; margin-right: 14px;
+      user-select: none;
+      border-right: 1px solid rgba(100,160,200,0.18);
+      padding-right: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">{ }</div>
+      <div class="logo-text">
+        <h1>Code Craftsman</h1>
+        <span>Formatter &amp; Validator</span>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-secondary" onclick="loadSample()">Load Sample</button>
+      <button class="btn btn-ghost"     onclick="clearAll()">Clear All</button>
+      <button class="btn btn-primary"   onclick="formatContent()">Format ↵</button>
+    </div>
+  </header>
+
+  <!-- STATUS BAR -->
+  <div class="status-bar">
+    <span id="status-badge" class="status-badge idle">
+      <span class="status-dot"></span>
+      <span id="status-text">Ready</span>
+    </span>
+    <span id="status-detail" style="color:var(--text-light);font-size:11px;"></span>
+    <span class="status-info" id="status-info">Select a language and paste your code on the left</span>
+  </div>
+
+  <!-- LANGUAGE SELECTOR -->
+  <div class="lang-bar">
+    <span class="lang-label">Language:</span>
+    <button class="lang-btn active" data-lang="json"        onclick="setLang(this)">JSON</button>
+    <button class="lang-btn"        data-lang="json-string" onclick="setLang(this)">JSON String</button>
+    <button class="lang-btn"        data-lang="javascript"  onclick="setLang(this)">JavaScript</button>
+    <button class="lang-btn"        data-lang="typescript"  onclick="setLang(this)">TypeScript</button>
+    <button class="lang-btn"        data-lang="html"        onclick="setLang(this)">HTML</button>
+    <button class="lang-btn"        data-lang="css"         onclick="setLang(this)">CSS</button>
+    <button class="lang-btn"        data-lang="graphql"     onclick="setLang(this)">GraphQL</button>
+    <button class="lang-btn"        data-lang="xml"         onclick="setLang(this)">XML</button>
+    <button class="lang-btn"        data-lang="gql-to-json" onclick="setLang(this)">GQL → JSON Body</button>
+  </div>
+
+  <!-- MAIN -->
+  <main>
+
+    <!-- LEFT PANEL -->
+    <div class="panel panel-left">
+      <div class="panel-header">
+        <div class="panel-title">
+          <div class="panel-icon icon-left">✎</div>
+          <span id="panel-left-title">Input</span>
+        </div>
+        <div class="panel-actions">
+          <button class="icon-btn" title="Paste" onclick="pasteFromClipboard()">📋</button>
+          <button class="clear-btn" onclick="clearInput()">Clear</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <textarea
+          id="input-textarea"
+          spellcheck="false"
+          placeholder='Paste your JSON here…'
+          oninput="onInputChange()"
+          onkeydown="handleTab(event)"
+        ></textarea>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL -->
+    <div class="panel panel-right">
+      <div class="panel-header">
+        <div class="panel-title">
+          <div class="panel-icon icon-right">{ }</div>
+          Formatted Output
+        </div>
+        <div class="panel-actions">
+          <span class="indent-label">Indent:</span>
+          <div class="indent-group">
+            <button class="indent-btn active" id="ind-2"   onclick="setIndent(2)">2</button>
+            <button class="indent-btn"        id="ind-4"   onclick="setIndent(4)">4</button>
+            <button class="indent-btn"        id="ind-tab" onclick="setIndent('tab')">⇥</button>
+          </div>
+          <button class="icon-btn" title="Copy"   onclick="copyOutput()"   style="margin-left:6px;">⎘</button>
+          <button class="icon-btn" title="Minify" onclick="minifyOutput()">⊟</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div id="output-container">
+          <div class="empty-state" id="empty-state">
+            <div class="empty-state-icon">{ }</div>
+            <p>Your formatted code<br>will appear here</p>
+          </div>
+          <div id="output-code" style="display:none;"></div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer>Code Craftsman · Runs entirely in your browser · No data is sent anywhere</footer>
+
+  <!-- TOAST -->
+  <div class="toast" id="toast"></div>
+
+<script>
+  // ── STATE ──
+  let currentIndent  = 2;
+  let currentParsed  = null;   // only for JSON / JSON String
+  let currentFormatted = '';   // last formatted string (for copy)
+  let currentLang    = 'json';
+  let autoFormat     = true;
+  let debounceTimer  = null;
+
+  // ── LANGUAGE CONFIG ──
+  const LANG_LABELS = {
+    'json':        'JSON Input',
+    'json-string': 'JSON String Input',
+    'javascript':  'JavaScript Input',
+    'typescript':  'TypeScript Input',
+    'html':        'HTML Input',
+    'css':         'CSS Input',
+    'graphql':     'GraphQL Input',
+    'xml':         'XML Input',
+    'gql-to-json': 'GraphQL → JSON Body',
+  };
+
+  const PLACEHOLDERS = {
+    'json':        'Paste your JSON here…\n\nExample:\n{"name":"Alice","age":30,"active":true}',
+    'json-string': 'Paste an escaped JSON string here…\n\nExample:\n"{\\\"name\\\":\\\"Alice\\\",\\\"age\\\":30}"',
+    'javascript':  'Paste your JavaScript here…\n\nExample:\nconst greet=(name)=>{return `Hello, ${name}!`;}',
+    'typescript':  'Paste your TypeScript here…\n\nExample:\ninterface User{name:string;age:number;}',
+    'html':        'Paste your HTML here…\n\nExample:\n<div class="box"><h1>Hi</h1><p>Welcome</p></div>',
+    'css':         'Paste your CSS here…\n\nExample:\n.box{display:flex;gap:1rem;padding:1rem;}',
+    'graphql':     'Paste your GraphQL here…\n\nExample:\nquery GetUser($id:ID!){user(id:$id){name email}}',
+    'xml':         'Paste your XML here…\n\nExample:\n<root><user><name>Alice</name></user></root>',
+    'gql-to-json': 'Paste your GraphQL query or mutation here…\n\nExample:\nquery GetUser($id: ID!, $active: Boolean) {\n  user(id: $id) {\n    name\n    email\n  }\n}',
+  };
+
+  const SAMPLES = {
+    'json': `{"store":{"name":"The Cozy Bookshop","founded":1987,"open":true,"location":{"city":"Edinburgh","country":"Scotland","coordinates":{"lat":55.9533,"lng":-3.1883}},"inventory":[{"id":1,"title":"The Wind in the Willows","author":"Kenneth Grahame","year":1908,"price":12.99,"inStock":true,"tags":["classic","children","animals"]},{"id":2,"title":"Norwegian Wood","author":"Haruki Murakami","year":1987,"price":14.50,"inStock":false,"tags":["fiction","literary","Japan"]}],"staff":{"count":4,"manager":"Margaret Thornton","contact":{"email":"margaret@cozybooks.scot","phone":null}}}}`,
+    'json-string': `"{\\"store\\":{\\"name\\":\\"The Cozy Bookshop\\",\\"founded\\":1987,\\"open\\":true,\\"manager\\":\\"Margaret Thornton\\",\\"city\\":\\"Edinburgh\\"}}"`,
+    'javascript': `const fetchUser=async(id)=>{const res=await fetch('/api/users/'+id);if(!res.ok){throw new Error('User not found');}const data=await res.json();return{id:data.id,name:data.name,email:data.email,createdAt:new Date(data.created_at).toLocaleDateString()};};function debounce(fn,delay){let timer;return(...args)=>{clearTimeout(timer);timer=setTimeout(()=>fn(...args),delay);};}`,
+    'typescript': `interface User{id:number;name:string;email:string;role:'admin'|'user';createdAt:Date;}type ApiResponse<T>={data:T;status:number;message:string;};async function getUser(id:number):Promise<ApiResponse<User>>{const response=await fetch('/api/users/'+id);if(!response.ok){throw new Error('HTTP error: '+response.status);}return response.json();}`,
+    'html': `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>My Page</title><link rel="stylesheet" href="styles.css"></head><body><div class="container"><header><h1>Hello World</h1><nav><a href="/">Home</a><a href="/about">About</a></nav></header><main><p class="intro">Welcome to my page.</p><ul><li>Item one</li><li>Item two</li></ul></main></div></body></html>`,
+    'css': `.container{display:flex;flex-direction:column;gap:1.5rem;max-width:1200px;margin:0 auto;padding:0 1.5rem;}.button{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;padding:0.6rem 1.4rem;border-radius:0.4rem;cursor:pointer;font-size:1rem;font-weight:600;transition:all 0.2s ease;}.button:hover{opacity:0.9;transform:translateY(-2px);box-shadow:0 4px 15px rgba(102,126,234,0.4);}@media(max-width:768px){.container{padding:0 1rem;}}`,
+    'graphql': `query GetStoreInventory($storeId:ID!,$inStock:Boolean){store(id:$storeId){name location{city country}inventory(inStock:$inStock){id title author price tags}staff{manager contact{email phone}}}}mutation UpdateBook($id:ID!,$input:BookInput!){updateBook(id:$id,input:$input){id title price inStock}}`,
+    'xml': `<?xml version="1.0" encoding="UTF-8"?><bookstore><book genre="fiction" inStock="true"><title>The Great Gatsby</title><author>F. Scott Fitzgerald</author><year>1925</year><price currency="USD">12.99</price><tags><tag>classic</tag><tag>american</tag></tags></book><book genre="classic" inStock="false"><title>To Kill a Mockingbird</title><author>Harper Lee</author><year>1960</year><price currency="USD">10.50</price></book></bookstore>`,
+    'gql-to-json': `query GetStoreInventory($storeId: ID!, $inStock: Boolean, $limit: Int, $search: String) {\n  store(id: $storeId) {\n    name\n    location {\n      city\n      country\n    }\n    inventory(inStock: $inStock, limit: $limit, search: $search) {\n      id\n      title\n      author\n      price\n      tags\n    }\n    staff {\n      manager\n      contact {\n        email\n        phone\n      }\n    }\n  }\n}`,
+  };
+
+  // ── LANGUAGE SWITCH ──
+  function setLang(btn) {
+    currentLang = btn.dataset.lang;
+    document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-left-title').textContent = LANG_LABELS[currentLang] || 'Input';
+    document.getElementById('input-textarea').placeholder = PLACEHOLDERS[currentLang] || '';
+    // Re-format if there's content
+    const raw = document.getElementById('input-textarea').value.trim();
+    if (raw) formatContent(true);
+    else { showEmpty(); setStatus('idle', 'Ready', '', 'Paste ' + currentLang.toUpperCase() + ' on the left to begin'); }
+  }
+
+  // ── INDENT ──
+  function setIndent(val) {
+    currentIndent = val;
+    ['2','4','tab'].forEach(k => document.getElementById('ind-'+k).classList.remove('active'));
+    document.getElementById('ind-'+val).classList.add('active');
+    const raw = document.getElementById('input-textarea').value.trim();
+    if (raw) formatContent(true);
+  }
+
+  function getIndentStr() { return currentIndent === 'tab' ? '\t' : currentIndent; }
+
+  // ── KEYBOARD ──
+  function handleTab(e) {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const ta = e.target, s = ta.selectionStart, end = ta.selectionEnd;
+      ta.value = ta.value.slice(0, s) + '  ' + ta.value.slice(end);
+      ta.selectionStart = ta.selectionEnd = s + 2;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formatContent(); }
+  }
+
+  function onInputChange() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => { if (autoFormat) formatContent(true); }, 600);
+  }
+
+  // ── MAIN FORMAT DISPATCHER ──
+  function formatContent(silent = false) {
+    const raw = document.getElementById('input-textarea').value.trim();
+    if (!raw) {
+      currentParsed = null; currentFormatted = '';
+      showEmpty();
+      setStatus('idle', 'Ready', '', 'Paste ' + currentLang.toUpperCase() + ' on the left to begin');
+      return;
+    }
+    switch (currentLang) {
+      case 'json':        formatJSON(raw);       break;
+      case 'json-string': formatJSONString(raw); break;
+      case 'javascript':  formatJS(raw, false);  break;
+      case 'typescript':  formatJS(raw, true);   break;
+      case 'html':        formatHTML(raw);       break;
+      case 'css':         formatCSS(raw);        break;
+      case 'graphql':     formatGraphQL(raw);    break;
+      case 'xml':         formatXML(raw);              break;
+      case 'gql-to-json': convertGQLToJSONBody(raw);   break;
+    }
+  }
+
+  // ── JSON FORMATTER ──
+  function formatJSON(raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      currentParsed = parsed;
+      const indentStr = getIndentStr();
+      const formatted = JSON.stringify(parsed, null, indentStr);
+      currentFormatted = formatted;
+      renderHighlighted(highlightJSON(formatted));
+      const size = new Blob([raw]).size;
+      const keys = countKeys(parsed);
+      setStatus('valid', '✓ Valid JSON', '', `${keys} key${keys!==1?'s':''} · ${formatBytes(size)}`);
+    } catch(e) {
+      currentParsed = null;
+      showError(e.message);
+      setStatus('invalid', '✗ Invalid JSON', e.message.split('\n')[0], '');
+    }
+  }
+
+  // ── JSON STRING FORMATTER ──
+  function formatJSONString(raw) {
+    try {
+      // Parse the outer JSON string literal
+      let inner;
+      try {
+        inner = JSON.parse(raw); // Result should be a string
+      } catch(e) {
+        // Try unescaping manually if not wrapped in quotes
+        inner = raw.replace(/\\"/g, '"').replace(/\\\\/g, '\\').replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+      }
+      if (typeof inner !== 'string') throw new Error('Input is not a JSON string value — wrap it in quotes, e.g. "{\\"key\\":\\"value\\"}"');
+      const parsed = JSON.parse(inner);
+      currentParsed = parsed;
+      const indentStr = getIndentStr();
+      const formatted = JSON.stringify(parsed, null, indentStr);
+      currentFormatted = formatted;
+      renderHighlighted(highlightJSON(formatted));
+      const keys = countKeys(parsed);
+      setStatus('valid', '✓ Valid JSON String', '', `Decoded → ${keys} key${keys!==1?'s':''}`);
+    } catch(e) {
+      currentParsed = null;
+      showError(e.message);
+      setStatus('invalid', '✗ Invalid JSON String', e.message.split('\n')[0], '');
+    }
+  }
+
+  // ── JS / TS FORMATTER ──
+  function formatJS(raw, isTS) {
+    try {
+      if (typeof js_beautify === 'undefined') throw new Error('Beautifier not yet loaded — try again in a moment.');
+      const indentStr = getIndentStr();
+      const formatted = js_beautify(raw, {
+        indent_size: currentIndent === 'tab' ? 1 : currentIndent,
+        indent_char: currentIndent === 'tab' ? '\t' : ' ',
+        space_in_empty_paren: true,
+        preserve_newlines: true,
+        max_preserve_newlines: 2,
+        jslint_happy: false,
+        end_with_newline: false,
+      });
+      currentFormatted = formatted;
+      renderHighlighted(highlightJS(formatted, isTS));
+      const lines = formatted.split('\n').length;
+      setStatus('valid', `✓ ${isTS ? 'TypeScript' : 'JavaScript'} Formatted`, '', `${lines} line${lines!==1?'s':''}`);
+    } catch(e) {
+      showError(e.message);
+      setStatus('invalid', '✗ Format Error', e.message.split('\n')[0], '');
+    }
+  }
+
+  // ── HTML FORMATTER ──
+  function formatHTML(raw) {
+    try {
+      if (typeof html_beautify === 'undefined') throw new Error('Beautifier not yet loaded — try again in a moment.');
+      const formatted = html_beautify(raw, {
+        indent_size: currentIndent === 'tab' ? 1 : currentIndent,
+        indent_char: currentIndent === 'tab' ? '\t' : ' ',
+        wrap_line_length: 0,
+        preserve_newlines: false,
+        end_with_newline: false,
+      });
+      currentFormatted = formatted;
+      renderHighlighted(highlightHTML(formatted));
+      const lines = formatted.split('\n').length;
+      setStatus('valid', '✓ HTML Formatted', '', `${lines} line${lines!==1?'s':''}`);
+    } catch(e) {
+      showError(e.message);
+      setStatus('invalid', '✗ Format Error', e.message.split('\n')[0], '');
+    }
+  }
+
+  // ── CSS FORMATTER ──
+  function formatCSS(raw) {
+    try {
+      if (typeof css_beautify === 'undefined') throw new Error('Beautifier not yet loaded — try again in a moment.');
+      const formatted = css_beautify(raw, {
+        indent_size: currentIndent === 'tab' ? 1 : currentIndent,
+        indent_char: currentIndent === 'tab' ? '\t' : ' ',
+        end_with_newline: false,
+      });
+      currentFormatted = formatted;
+      renderHighlighted(highlightCSS(formatted));
+      const lines = formatted.split('\n').length;
+      setStatus('valid', '✓ CSS Formatted', '', `${lines} line${lines!==1?'s':''}`);
+    } catch(e) {
+      showError(e.message);
+      setStatus('invalid', '✗ Format Error', e.message.split('\n')[0], '');
+    }
+  }
+
+  // ── GRAPHQL FORMATTER ──
+  function formatGraphQL(raw) {
+    try {
+      const formatted = prettyGraphQL(raw);
+      currentFormatted = formatted;
+      renderHighlighted(highlightGraphQL(formatted));
+      const lines = formatted.split('\n').length;
+      setStatus('valid', '✓ GraphQL Formatted', '', `${lines} line${lines!==1?'s':''}`);
+    } catch(e) {
+      showError(e.message);
+      setStatus('invalid', '✗ Format Error', e.message.split('\n')[0], '');
+    }
+  }
+
+  function prettyGraphQL(src) {
+    src = src.trim().replace(/\s+/g, ' ');
+    // Add spaces around braces then re-tokenize
+    src = src.replace(/\{/g, ' { ').replace(/\}/g, ' } ').replace(/\s+/g, ' ').trim();
+    const tokens = src.split(' ').filter(t => t.length > 0);
+    let out = '', depth = 0;
+    for (let j = 0; j < tokens.length; j++) {
+      const tok = tokens[j];
+      if (tok === '{') {
+        out = out.trimEnd() + ' {\n' + '  '.repeat(depth + 1);
+        depth++;
+      } else if (tok === '}') {
+        out = out.trimEnd() + '\n' + '  '.repeat(Math.max(0, depth - 1)) + '}';
+        depth = Math.max(0, depth - 1);
+        if (depth > 0 && j + 1 < tokens.length && tokens[j+1] !== '}') out += '\n' + '  '.repeat(depth);
+      } else if (tok === ',') {
+        out = out.trimEnd() + '\n' + '  '.repeat(depth);
+      } else {
+        out += tok + ' ';
+      }
+    }
+    // Validate balanced braces
+    if (depth !== 0) throw new Error('Unbalanced braces in GraphQL input');
+    return out.trim();
+  }
+
+  // ── GRAPHQL → JSON BODY CONVERTER ──
+  function convertGQLToJSONBody(raw) {
+    try {
+      // Minify: collapse all whitespace to single spaces
+      const minified = raw.replace(/\s+/g, ' ').trim();
+
+      // Extract operation type + name  e.g. "query GetUser" or "mutation UpdateBook"
+      const opMatch = minified.match(/^(query|mutation|subscription)\s+([A-Za-z_]\w*)/i);
+      const operationName = opMatch ? opMatch[2] : null;
+
+      // Extract variable definitions from  ($id: ID!, $limit: Int = 10, ...)
+      const varBlockMatch = minified.match(/(?:query|mutation|subscription)\s*\w*\s*\(([^)]+)\)/i);
+      const variables = {};
+      if (varBlockMatch) {
+        const defs = varBlockMatch[1].split(',');
+        for (const def of defs) {
+          // Match $varName: TypeName  (strip default value after =)
+          const m = def.trim().match(/^\$([A-Za-z_]\w*)\s*:\s*([^=]+)/);
+          if (m) {
+            const name = m[1];
+            const type = m[2].trim().replace(/!$/, '').trim(); // strip non-null !
+            variables[name] = gqlTypeDefault(type);
+          }
+        }
+      }
+
+      // Build the JSON body object
+      const body = {};
+      body.query = minified;
+      if (operationName)              body.operationName = operationName;
+      if (Object.keys(variables).length) body.variables = variables;
+
+      const formatted = JSON.stringify(body, null, 2);
+      currentFormatted = formatted;
+      currentParsed = body;
+      renderHighlighted(highlightJSON(formatted));
+
+      const varCount = Object.keys(variables).length;
+      setStatus('valid', '✓ Converted to JSON Body', '',
+        `${operationName || 'anonymous'} · ${varCount} variable${varCount !== 1 ? 's' : ''}`);
+    } catch(e) {
+      showError(e.message);
+      setStatus('invalid', '✗ Conversion Error', e.message.split('\n')[0], '');
+    }
+  }
+
+  // Return a sensible placeholder value for a GraphQL scalar type
+  function gqlTypeDefault(type) {
+    if (type.startsWith('[')) return [];          // List type
+    switch (type) {
+      case 'String':  return '';
+      case 'Int':     return 0;
+      case 'Float':   return 0.0;
+      case 'Boolean': return false;
+      case 'ID':      return '';
+      default:        return null;               // Custom / object types
+    }
+  }
+
+  // ── XML FORMATTER ──
+  function formatXML(raw) {
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(raw, 'application/xml');
+      const errNode = doc.querySelector('parsererror');
+      if (errNode) {
+        const msg = errNode.textContent.trim().split('\n')[0];
+        throw new Error(msg);
+      }
+      const indent = currentIndent === 'tab' ? '\t' : ' '.repeat(currentIndent);
+      const formatted = serializeXML(doc.documentElement, 0, indent);
+      // Prepend XML declaration if present in source
+      const withDecl = raw.trimStart().startsWith('<?xml') ? '<?xml version="1.0" encoding="UTF-8"?>\n' + formatted : formatted;
+      currentFormatted = withDecl;
+      renderHighlighted(highlightXML(withDecl));
+      const lines = withDecl.split('\n').length;
+      setStatus('valid', '✓ Valid XML', '', `${lines} line${lines!==1?'s':''}`);
+    } catch(e) {
+      showError(e.message);
+      setStatus('invalid', '✗ Invalid XML', e.message.split('\n')[0], '');
+    }
+  }
+
+  function serializeXML(node, depth, indentStr) {
+    const pad = indentStr.repeat(depth);
+    if (node.nodeType === Node.TEXT_NODE) {
+      const t = node.textContent.trim();
+      return t ? pad + escHtml(t) : '';
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return '';
+    let attrs = '';
+    for (const a of node.attributes) attrs += ` ${a.name}="${escHtml(a.value)}"`;
+    const tag = node.tagName;
+    const children = Array.from(node.childNodes);
+    const textOnly = children.length === 1 && children[0].nodeType === Node.TEXT_NODE;
+    if (children.length === 0) return `${pad}&lt;${tag}${attrs}/&gt;`;
+    if (textOnly) {
+      const t = children[0].textContent.trim();
+      return t ? `${pad}&lt;${tag}${attrs}&gt;${escHtml(t)}&lt;/${tag}&gt;` : `${pad}&lt;${tag}${attrs}&gt;&lt;/${tag}&gt;`;
+    }
+    const childLines = children.map(c => serializeXML(c, depth + 1, indentStr)).filter(s => s.trim());
+    return `${pad}&lt;${tag}${attrs}&gt;\n${childLines.join('\n')}\n${pad}&lt;/${tag}&gt;`;
+  }
+
+  // ── SYNTAX HIGHLIGHTERS ──
+
+  function highlightJSON(json) {
+    return escHtml(json).replace(
+      /("(\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?|[{}[\],:])/g,
+      function(match) {
+        if (/^"/.test(match)) {
+          if (/:$/.test(match)) {
+            const key = match.slice(0, -1);
+            return `<span class="j-key">${key}</span><span class="j-colon">:</span>`;
+          }
+          return `<span class="j-str">${match}</span>`;
+        }
+        if (/true|false/.test(match)) return `<span class="j-bool">${match}</span>`;
+        if (/null/.test(match))       return `<span class="j-null">${match}</span>`;
+        if (/^[{}]/.test(match))      return `<span class="j-brace">${match}</span>`;
+        if (/^[[\]]/.test(match))     return `<span class="j-bracket">${match}</span>`;
+        if (match === ',')            return `<span class="j-comma">,</span>`;
+        return `<span class="j-num">${match}</span>`;
+      }
+    );
+  }
+
+  function highlightJS(code, isTS) {
+    const keywords = ['const','let','var','function','return','if','else','for','while','do','switch','case','break','continue','class','extends','import','export','default','new','this','typeof','instanceof','try','catch','finally','throw','async','await','of','in','from','null','undefined','true','false','void','delete','yield','static','super','get','set'];
+    if (isTS) keywords.push('type','interface','enum','namespace','abstract','implements','readonly','as','is','keyof','infer','never','unknown','any','string','number','boolean','object','declare','override');
+    let r = escHtml(code);
+    // Comments
+    r = r.replace(/(\/\/[^\n]*)/g,   '<span class="hl-comment">$1</span>');
+    r = r.replace(/(\/\*[\s\S]*?\*\/)/g, '<span class="hl-comment">$1</span>');
+    // Strings (work with HTML-escaped quotes)
+    r = r.replace(/(&quot;(?:[^&]|&(?!quot;))*?&quot;)/g, '<span class="hl-string">$1</span>');
+    r = r.replace(/(&#39;(?:[^&]|&(?!#39;))*?&#39;)/g,   '<span class="hl-string">$1</span>');
+    r = r.replace(/(&#96;[^&#]*&#96;)/g, '<span class="hl-string">$1</span>');
+    // Numbers
+    r = r.replace(/\b(\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\b/g, '<span class="hl-number">$1</span>');
+    // Keywords
+    const kwRe = new RegExp(`\\b(${keywords.join('|')})\\b`, 'g');
+    r = r.replace(kwRe, '<span class="hl-keyword">$1</span>');
+    return r;
+  }
+
+  function highlightHTML(code) {
+    let r = escHtml(code);
+    // Comments
+    r = r.replace(/(&lt;!--[\s\S]*?--&gt;)/g, '<span class="hl-comment">$1</span>');
+    // Doctype
+    r = r.replace(/(&lt;!DOCTYPE[^&]*&gt;)/gi, '<span class="hl-comment">$1</span>');
+    // Tags: opening/closing bracket + tag name
+    r = r.replace(/(&lt;\/?)([\w:-]+)/g, (m, bracket, name) =>
+      `<span class="hl-tag">${bracket}</span><span class="hl-tagname">${name}</span>`
+    );
+    r = r.replace(/(\/?&gt;)/g, '<span class="hl-tag">$1</span>');
+    // Attribute values
+    r = r.replace(/(&quot;[^&]*&quot;)/g, '<span class="hl-string">$1</span>');
+    return r;
+  }
+
+  function highlightCSS(code) {
+    let r = escHtml(code);
+    // Comments
+    r = r.replace(/(\/\*[\s\S]*?\*\/)/g, '<span class="hl-comment">$1</span>');
+    // At-rules
+    r = r.replace(/(@[\w-]+)/g, '<span class="hl-keyword">$1</span>');
+    // Property names
+    r = r.replace(/([\w-]+)(\s*:)(?!:)/g, '<span class="hl-prop">$1</span>$2');
+    // Hex colours
+    r = r.replace(/(#[0-9a-fA-F]{3,8})\b/g, '<span class="hl-number">$1</span>');
+    // Numbers with units
+    r = r.replace(/\b(\d+(?:\.\d+)?(?:px|em|rem|%|vh|vw|pt|s|ms|deg)?)\b/g, '<span class="hl-number">$1</span>');
+    // Strings
+    r = r.replace(/(&quot;[^&]*&quot;)/g, '<span class="hl-string">$1</span>');
+    return r;
+  }
+
+  function highlightGraphQL(code) {
+    let r = escHtml(code);
+    // Comments
+    r = r.replace(/(#[^\n]*)/g, '<span class="hl-comment">$1</span>');
+    // Keywords
+    r = r.replace(/\b(query|mutation|subscription|fragment|on|type|input|enum|interface|union|scalar|directive|extend|schema|implements)\b/g,
+      '<span class="hl-keyword">$1</span>');
+    // Type names (PascalCase)
+    r = r.replace(/\b([A-Z][a-zA-Z0-9]*)\b/g, '<span class="hl-type">$1</span>');
+    // Directives
+    r = r.replace(/(@[\w]+)/g, '<span class="hl-directive">$1</span>');
+    // Strings
+    r = r.replace(/(&quot;[^&]*&quot;)/g, '<span class="hl-string">$1</span>');
+    // Numbers
+    r = r.replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="hl-number">$1</span>');
+    return r;
+  }
+
+  function highlightXML(code) {
+    // code is already HTML-escaped from serializeXML
+    let r = code;
+    // XML declaration
+    r = r.replace(/(&lt;\?xml[^&]*\?&gt;)/g, '<span class="hl-comment">$1</span>');
+    // Tags
+    r = r.replace(/(&lt;\/?)([\w:-]+)/g, (m, bracket, name) =>
+      `<span class="hl-tag">${bracket}</span><span class="hl-tagname">${name}</span>`
+    );
+    r = r.replace(/(\/?&gt;)/g, '<span class="hl-tag">$1</span>');
+    // Attribute values
+    r = r.replace(/(&quot;[^&]*&quot;)/g, '<span class="hl-string">$1</span>');
+    return r;
+  }
+
+  // ── RENDER ──
+  function renderHighlighted(html) {
+    const out   = document.getElementById('output-code');
+    const empty = document.getElementById('empty-state');
+    empty.style.display = 'none';
+    out.style.display   = 'block';
+    // Add line numbers
+    const lines = html.split('\n');
+    out.innerHTML = lines.map((line, i) =>
+      `<span class="line-num">${i+1}</span>${line}`
+    ).join('\n');
+  }
+
+  function showEmpty() {
+    document.getElementById('empty-state').style.display = 'flex';
+    document.getElementById('output-code').style.display = 'none';
+  }
+
+  function showError(msg) {
+    const out   = document.getElementById('output-code');
+    const empty = document.getElementById('empty-state');
+    empty.style.display = 'none';
+    out.style.display   = 'block';
+    out.innerHTML = `<div class="error-state">
+      <div class="error-title">⚠ Error</div>
+      <div class="error-msg">${escHtml(msg)}</div>
+    </div>`;
+  }
+
+  function setStatus(type, text, detail, info) {
+    document.getElementById('status-badge').className = 'status-badge ' + type;
+    document.getElementById('status-text').textContent   = text;
+    document.getElementById('status-detail').textContent = detail;
+    document.getElementById('status-info').textContent   = info;
+  }
+
+  // ── UTILITIES ──
+  function escHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  function countKeys(obj, count = 0) {
+    if (typeof obj === 'object' && obj !== null) {
+      const keys = Object.keys(obj);
+      count += keys.length;
+      keys.forEach(k => { count = countKeys(obj[k], count); });
+    }
+    return count;
+  }
+
+  function formatBytes(b) {
+    if (b < 1024) return b + ' B';
+    if (b < 1024*1024) return (b/1024).toFixed(1) + ' KB';
+    return (b/(1024*1024)).toFixed(2) + ' MB';
+  }
+
+  // ── ACTIONS ──
+  function clearAll() {
+    document.getElementById('input-textarea').value = '';
+    currentParsed = null; currentFormatted = '';
+    showEmpty();
+    setStatus('idle','Ready','','Select a language and paste your code on the left');
+  }
+
+  function clearInput() { clearAll(); }
+
+  async function pasteFromClipboard() {
+    try {
+      const text = await navigator.clipboard.readText();
+      document.getElementById('input-textarea').value = text;
+      formatContent();
+    } catch(e) { showToast('⚠ Clipboard access denied'); }
+  }
+
+  function copyOutput() {
+    const text = currentFormatted;
+    if (!text) { showToast('Nothing to copy'); return; }
+    navigator.clipboard.writeText(text).then(() => {
+      showToast('✓ Copied to clipboard!');
+    }).catch(() => {
+      const ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+      showToast('✓ Copied!');
+    });
+  }
+
+  function minifyOutput() {
+    if (currentLang === 'json' || currentLang === 'json-string') {
+      if (!currentParsed) { showToast('Nothing to minify'); return; }
+      const minified = JSON.stringify(currentParsed);
+      document.getElementById('input-textarea').value = minified;
+      formatContent();
+      showToast('Minified ↓');
+    } else {
+      showToast('Minify is available for JSON only');
+    }
+  }
+
+  function loadSample() {
+    const sample = SAMPLES[currentLang];
+    if (!sample) { showToast('No sample available for ' + currentLang); return; }
+    document.getElementById('input-textarea').value = sample;
+    formatContent();
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2200);
+  }
+
+  // ── KEYBOARD SHORTCUT ──
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') formatContent();
+  });
+
+  // ── INIT ──
+  document.getElementById('input-textarea').placeholder = PLACEHOLDERS['json'];
+</script>
+</body>
+</html>
