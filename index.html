@@ -10,6 +10,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.14.9/beautify.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.14.9/beautify-css.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.14.9/beautify-html.min.js"></script>
+  <!-- js-yaml for YAML parsing and formatting -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
   <style>
     :root {
       --bg-main:        #F6F6F6;
@@ -282,7 +284,7 @@
     #output-code {
       font-family: 'JetBrains Mono', monospace;
       font-size: 13px; line-height: 1.8;
-      white-space: pre; color: var(--text-dark);
+      color: var(--text-dark);
     }
 
     /* ── JSON SYNTAX HIGHLIGHTING ── */
@@ -376,11 +378,52 @@
     .line-num {
       display: inline-block; width: 30px;
       color: rgba(44,90,114,0.35); font-size: 11px;
-      text-align: right; margin-right: 14px;
-      user-select: none;
-      border-right: 1px solid rgba(100,160,200,0.18);
-      padding-right: 8px;
+      text-align: right; user-select: none;
     }
+
+    /* ── CODE LINE LAYOUT (gutter + content) ── */
+    .code-line {
+      display: flex;
+      align-items: flex-start;
+      min-height: 1.8em;
+    }
+    .line-gutter {
+      display: flex;
+      align-items: center;
+      justify-content: space-between; /* line-num left, symbol right */
+      flex-shrink: 0;
+      width: 60px;
+      padding-right: 0;
+      margin-right: 10px;
+      border-right: 1px solid rgba(100,160,200,0.18);
+      user-select: none;
+    }
+    .line-content {
+      flex: 1;
+      white-space: pre;
+      min-width: 0;
+    }
+    .fold-gutter-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 16px; height: 16px;
+      font-size: 15px; font-weight: 700; line-height: 1;
+      font-family: 'JetBrains Mono', monospace;
+      border: none;           /* no box border */
+      border-radius: 0;
+      background: transparent; /* no background fill */
+      color: var(--text-light);
+      cursor: pointer; padding: 0; flex-shrink: 0;
+      transition: color 0.12s;
+    }
+    .fold-gutter-btn:hover { color: var(--accent-gold); background: transparent; }
+    .fold-gutter-placeholder {
+      display: inline-flex; width: 15px; height: 15px; flex-shrink: 0;
+    }
+    /* Folded line: hide member lines via JS, show peek on opener */
+    .line-peek { display: none; }
+    .code-line.folded .line-normal { display: none; }
+    .code-line.folded .line-peek   { display: inline; }
+    .j-dim { color: var(--text-light); font-style: italic; font-size: 0.88em; }
   </style>
 </head>
 <body>
@@ -423,6 +466,8 @@
     <button class="lang-btn"        data-lang="graphql"     onclick="setLang(this)">GraphQL</button>
     <button class="lang-btn"        data-lang="xml"         onclick="setLang(this)">XML</button>
     <button class="lang-btn"        data-lang="gql-to-json" onclick="setLang(this)">GQL → JSON Body</button>
+    <button class="lang-btn"        data-lang="yaml"        onclick="setLang(this)">YAML</button>
+    <button class="lang-btn"        data-lang="jwt"         onclick="setLang(this)">JWT Decode</button>
   </div>
 
   <!-- MAIN -->
@@ -456,7 +501,7 @@
       <div class="panel-header">
         <div class="panel-title">
           <div class="panel-icon icon-right">{ }</div>
-          Formatted Output
+          <span id="panel-right-title">Formatted Output</span>
         </div>
         <div class="panel-actions">
           <span class="indent-label">Indent:</span>
@@ -474,6 +519,14 @@
           <button class="icon-btn" title="Minify" onclick="minifyOutput()">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+          </button>
+          <button class="icon-btn" id="expand-all-btn" title="Expand All" onclick="expandAll()">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 3 21 3 21 9"></polyline>
+              <polyline points="9 21 3 21 3 15"></polyline>
+              <line x1="21" y1="3" x2="14" y2="10"></line>
+              <line x1="3" y1="21" x2="10" y2="14"></line>
             </svg>
           </button>
         </div>
@@ -517,6 +570,8 @@
     'graphql':     'GraphQL Input',
     'xml':         'XML Input',
     'gql-to-json': 'GraphQL → JSON Body',
+    'yaml':        'YAML Input',
+    'jwt':         'JWT Input',
   };
 
   const PLACEHOLDERS = {
@@ -529,6 +584,8 @@
     'graphql':     'Paste your GraphQL here…\n\nExample:\nquery GetUser($id:ID!){user(id:$id){name email}}',
     'xml':         'Paste your XML here…\n\nExample:\n<root><user><name>Alice</name></user></root>',
     'gql-to-json': 'Paste your GraphQL query or mutation here…\n\nExample:\nquery GetUser($id: ID!, $active: Boolean) {\n  user(id: $id) {\n    name\n    email\n  }\n}',
+    'yaml':        'Paste your YAML here…\n\nExample:\nname: Alice\nage: 30\nactive: true\nroles:\n  - admin\n  - editor',
+    'jwt':         'Paste your JWT token here…\n\nExample:\neyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U',
   };
 
   const SAMPLES = {
@@ -541,6 +598,8 @@
     'graphql': `query GetStoreInventory($storeId:ID!,$inStock:Boolean){store(id:$storeId){name location{city country}inventory(inStock:$inStock){id title author price tags}staff{manager contact{email phone}}}}mutation UpdateBook($id:ID!,$input:BookInput!){updateBook(id:$id,input:$input){id title price inStock}}`,
     'xml': `<?xml version="1.0" encoding="UTF-8"?><bookstore><book genre="fiction" inStock="true"><title>The Great Gatsby</title><author>F. Scott Fitzgerald</author><year>1925</year><price currency="USD">12.99</price><tags><tag>classic</tag><tag>american</tag></tags></book><book genre="classic" inStock="false"><title>To Kill a Mockingbird</title><author>Harper Lee</author><year>1960</year><price currency="USD">10.50</price></book></bookstore>`,
     'gql-to-json': `query GetStoreInventory($storeId: ID!, $inStock: Boolean, $limit: Int, $search: String) {\n  store(id: $storeId) {\n    name\n    location {\n      city\n      country\n    }\n    inventory(inStock: $inStock, limit: $limit, search: $search) {\n      id\n      title\n      author\n      price\n      tags\n    }\n    staff {\n      manager\n      contact {\n        email\n        phone\n      }\n    }\n  }\n}`,
+    'yaml': `store:\n  name: The Cozy Bookshop\n  founded: 1987\n  open: true\n  location:\n    city: Edinburgh\n    country: Scotland\n    coordinates:\n      lat: 55.9533\n      lng: -3.1883\n  inventory:\n    - id: 1\n      title: The Wind in the Willows\n      author: Kenneth Grahame\n      year: 1908\n      price: 12.99\n      inStock: true\n      tags:\n        - classic\n        - children\n        - animals\n    - id: 2\n      title: Norwegian Wood\n      author: Haruki Murakami\n      year: 1987\n      price: 14.50\n      inStock: false\n      tags:\n        - fiction\n        - literary\n        - Japan\n  staff:\n    count: 4\n    manager: Margaret Thornton\n    contact:\n      email: margaret@cozybooks.scot\n      phone: null`,
+    'jwt': `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiZW1haWwiOiJqb2huLmRvZUBleGFtcGxlLmNvbSIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTUxNjIzOTAyMiwiZXhwIjo5OTk5OTk5OTk5fQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c`,
   };
 
   // ── LANGUAGE SWITCH ──
@@ -550,6 +609,12 @@
     btn.classList.add('active');
     document.getElementById('panel-left-title').textContent = LANG_LABELS[currentLang] || 'Input';
     document.getElementById('input-textarea').placeholder = PLACEHOLDERS[currentLang] || '';
+    // Right panel title: "Decoded Output" for JWT, "Formatted Output" otherwise
+    document.getElementById('panel-right-title').textContent =
+      currentLang === 'jwt' ? 'Decoded Output' : 'Formatted Output';
+    // Expand All button: not applicable for JWT
+    const expandBtn = document.getElementById('expand-all-btn');
+    if (expandBtn) expandBtn.style.display = currentLang === 'jwt' ? 'none' : '';
     // Re-format if there's content
     const raw = document.getElementById('input-textarea').value.trim();
     if (raw) formatContent(true);
@@ -602,6 +667,8 @@
       case 'graphql':     formatGraphQL(raw);    break;
       case 'xml':         formatXML(raw);              break;
       case 'gql-to-json': convertGQLToJSONBody(raw);   break;
+      case 'yaml':        formatYAML(raw);              break;
+      case 'jwt':         formatJWT(raw);               break;
     }
   }
 
@@ -613,7 +680,7 @@
       const indentStr = getIndentStr();
       const formatted = JSON.stringify(parsed, null, indentStr);
       currentFormatted = formatted;
-      renderHighlighted(highlightJSON(formatted));
+      renderCollapsibleJSONLines(parsed);
       const size = new Blob([raw]).size;
       const keys = countKeys(parsed);
       setStatus('valid', '✓ Valid JSON', '', `${keys} key${keys!==1?'s':''} · ${formatBytes(size)}`);
@@ -641,7 +708,7 @@
       const indentStr = getIndentStr();
       const formatted = JSON.stringify(parsed, null, indentStr);
       currentFormatted = formatted;
-      renderHighlighted(highlightJSON(formatted));
+      renderCollapsibleJSONLines(parsed);
       const keys = countKeys(parsed);
       setStatus('valid', '✓ Valid JSON String', '', `Decoded → ${keys} key${keys!==1?'s':''}`);
     } catch(e) {
@@ -687,7 +754,7 @@
         end_with_newline: false,
       });
       currentFormatted = formatted;
-      renderHighlighted(highlightHTML(formatted));
+      renderCollapsibleTextLines(formatted, line => highlightHTML(line));
       const lines = formatted.split('\n').length;
       setStatus('valid', '✓ HTML Formatted', '', `${lines} line${lines!==1?'s':''}`);
     } catch(e) {
@@ -720,7 +787,7 @@
     try {
       const formatted = prettyGraphQL(raw);
       currentFormatted = formatted;
-      renderHighlighted(highlightGraphQL(formatted));
+      renderCollapsibleTextLines(formatted, line => highlightGraphQL(line));
       const lines = formatted.split('\n').length;
       setStatus('valid', '✓ GraphQL Formatted', '', `${lines} line${lines!==1?'s':''}`);
     } catch(e) {
@@ -790,7 +857,7 @@
       const formatted = JSON.stringify(body, null, 2);
       currentFormatted = formatted;
       currentParsed = body;
-      renderHighlighted(highlightJSON(formatted));
+      renderCollapsibleJSONLines(body);
 
       const varCount = Object.keys(variables).length;
       setStatus('valid', '✓ Converted to JSON Body', '',
@@ -814,6 +881,145 @@
     }
   }
 
+  // ── YAML FORMATTER ──
+  function formatYAML(raw) {
+    try {
+      if (typeof jsyaml === 'undefined') throw new Error('YAML library not yet loaded — try again in a moment.');
+      // Validate by loading
+      const parsed = jsyaml.load(raw);
+      if (parsed === undefined) throw new Error('Empty or invalid YAML document.');
+      currentParsed = parsed;
+      // Re-dump to pretty YAML
+      const indentSize = currentIndent === 'tab' ? 2 : currentIndent;
+      const formatted = jsyaml.dump(parsed, {
+        indent: indentSize,
+        lineWidth: -1,
+        noRefs: true,
+        sortKeys: false,
+        quotingType: '"',
+      }).trimEnd();
+      currentFormatted = formatted;
+      renderCollapsibleTextLines(formatted, line => highlightYAML(line));
+      const lines = formatted.split('\n').length;
+      setStatus('valid', '✓ Valid YAML', '', `${lines} line${lines !== 1 ? 's' : ''}`);
+    } catch(e) {
+      currentParsed = null;
+      showError(e.message);
+      setStatus('invalid', '✗ Invalid YAML', e.message.split('\n')[0], '');
+    }
+  }
+
+  function highlightYAML(code) {
+    let r = escHtml(code);
+    // Document separators
+    r = r.replace(/^(---|\.\.\.)(\s*$)/gm, '<span class="hl-keyword">$1</span>$2');
+    // Comments
+    r = r.replace(/(#[^\n]*)/g, '<span class="hl-comment">$1</span>');
+    // Keys: word(s) followed by a colon at start of value
+    r = r.replace(/^(\s*)([^:\n#&*\[\]{},|>&quot;&#39;][^:\n]*)(\s*:)(?=\s|$)/gm,
+      '$1<span class="j-key">$2</span><span class="j-colon">$3</span>');
+    // Quoted string values
+    r = r.replace(/(&quot;(?:[^&]|&(?!quot;))*?&quot;)/g, '<span class="hl-string">$1</span>');
+    r = r.replace(/(&#39;(?:[^&]|&(?!#39;))*?&#39;)/g,   '<span class="hl-string">$1</span>');
+    // Boolean / null values
+    r = r.replace(/\b(true|false|yes|no|on|off)\b/g, '<span class="j-bool">$1</span>');
+    r = r.replace(/\b(null|~)\b/g, '<span class="j-null">$1</span>');
+    // Numbers
+    r = r.replace(/(?<=:\s{1,4}|\s- )(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\b/g, '<span class="hl-number">$1</span>');
+    // Array item dashes
+    r = r.replace(/^(\s*)(-)(\s)/gm, '$1<span class="j-bracket">$2</span>$3');
+    // Anchors & aliases
+    r = r.replace(/(&amp;[\w]+|\*[\w]+)/g, '<span class="hl-directive">$1</span>');
+    return r;
+  }
+
+  // ── JWT DECODER ──
+  function formatJWT(raw) {
+    try {
+      const token = raw.trim();
+      const parts  = token.split('.');
+      if (parts.length !== 3) throw new Error('Invalid JWT: expected exactly 3 dot-separated parts (header.payload.signature).');
+
+      function b64urlDecode(str) {
+        // Convert base64url → base64 and pad
+        str = str.replace(/-/g, '+').replace(/_/g, '/');
+        while (str.length % 4) str += '=';
+        // Decode UTF-8 safely
+        return decodeURIComponent(
+          atob(str).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
+        );
+      }
+
+      const headerObj  = JSON.parse(b64urlDecode(parts[0]));
+      const payloadObj = JSON.parse(b64urlDecode(parts[1]));
+      const signature  = parts[2];
+
+      currentParsed = { header: headerObj, payload: payloadObj, signature };
+
+      const indentSize = currentIndent === 'tab' ? '\t' : currentIndent;
+      const headerFmt  = JSON.stringify(headerObj,  null, indentSize);
+      const payloadFmt = JSON.stringify(payloadObj, null, indentSize);
+
+      // Store plain-text copy value
+      currentFormatted = `// ── HEADER ──\n${headerFmt}\n\n// ── PAYLOAD ──\n${payloadFmt}\n\n// ── SIGNATURE (Base64Url) ──\n${signature}`;
+
+      // Expiry info
+      let expBadge = '';
+      if (payloadObj.exp) {
+        const expDate = new Date(payloadObj.exp * 1000);
+        const expired = expDate < new Date();
+        expBadge = expired
+          ? ` · <span style="color:var(--error-red);font-weight:600;">⚠ Expired ${expDate.toLocaleString()}</span>`
+          : ` · <span style="color:#27AE60;font-weight:600;">✓ Expires ${expDate.toLocaleString()}</span>`;
+      }
+      if (payloadObj.iat) {
+        const iatDate = new Date(payloadObj.iat * 1000);
+        expBadge += ` · <span style="color:var(--text-light);">Issued ${iatDate.toLocaleString()}</span>`;
+      }
+
+      function numberedLines(highlightedHtml) {
+        return highlightedHtml.split('\n')
+          .map((line, i) =>
+            `<div class="code-line"><div class="line-gutter"><span class="line-num">${i+1}</span><span class="fold-gutter-placeholder"></span></div><div class="line-content">${line}</div></div>`
+          )
+          .join('');
+      }
+
+      const out   = document.getElementById('output-code');
+      const empty = document.getElementById('empty-state');
+      document.getElementById('output-container').style.paddingTop = '8px';
+      empty.style.display = 'none';
+      out.style.display   = 'block';
+      out.innerHTML = `
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11px;font-weight:700;letter-spacing:0.13em;text-transform:uppercase;
+                      color:var(--accent-copper);margin-bottom:5px;padding-bottom:3px;
+                      border-bottom:1px solid rgba(193,105,46,0.2);">▸ Header</div>
+          <div>${numberedLines(highlightJSON(headerFmt))}</div>
+        </div>
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11px;font-weight:700;letter-spacing:0.13em;text-transform:uppercase;
+                      color:var(--accent-gold);margin-bottom:5px;padding-bottom:3px;
+                      border-bottom:1px solid rgba(184,134,11,0.2);font-family:'Lato',sans-serif;">▸ Payload${expBadge}</div>
+          <div>${numberedLines(highlightJSON(payloadFmt))}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:700;letter-spacing:0.13em;text-transform:uppercase;
+                      color:var(--text-light);margin-bottom:5px;padding-bottom:3px;
+                      border-bottom:1px solid rgba(100,160,200,0.2);">▸ Signature <span style="font-weight:300;text-transform:none;letter-spacing:0;">(Base64Url — verify server-side)</span></div>
+          <div class="code-line"><div class="line-gutter"><span class="line-num">1</span><span class="fold-gutter-placeholder"></span></div><div class="line-content"><span style="color:var(--hl-string);">${escHtml(signature)}</span></div></div>
+        </div>`;
+
+      const alg    = headerObj.alg  || 'unknown';
+      const claims = Object.keys(payloadObj).length;
+      setStatus('valid', '✓ Valid JWT', '', `${alg} · ${claims} claim${claims !== 1 ? 's' : ''}`);
+    } catch(e) {
+      currentParsed = null;
+      showError(e.message);
+      setStatus('invalid', '✗ Invalid JWT', e.message.split('\n')[0], '');
+    }
+  }
+
   // ── XML FORMATTER ──
   function formatXML(raw) {
     try {
@@ -829,7 +1035,7 @@
       // Prepend XML declaration if present in source
       const withDecl = raw.trimStart().startsWith('<?xml') ? '<?xml version="1.0" encoding="UTF-8"?>\n' + formatted : formatted;
       currentFormatted = withDecl;
-      renderHighlighted(highlightXML(withDecl));
+      renderCollapsibleTextLines(withDecl, line => highlightXML(line));
       const lines = withDecl.split('\n').length;
       setStatus('valid', '✓ Valid XML', '', `${lines} line${lines!==1?'s':''}`);
     } catch(e) {
@@ -857,6 +1063,245 @@
     }
     const childLines = children.map(c => serializeXML(c, depth + 1, indentStr)).filter(s => s.trim());
     return `${pad}&lt;${tag}${attrs}&gt;\n${childLines.join('\n')}\n${pad}&lt;/${tag}&gt;`;
+  }
+
+  // ── OUTPUT HELPERS ──
+
+  // Show the output panel with arbitrary HTML (used by JWT and minify)
+  function showOutput(html) {
+    const out   = document.getElementById('output-code');
+    const empty = document.getElementById('empty-state');
+    document.getElementById('output-container').style.paddingTop = '';
+    empty.style.display = 'none';
+    out.style.display   = 'block';
+    out.innerHTML = html;
+  }
+
+  // Standard line-numbered rendering for non-collapsible formats (JS/TS/CSS)
+  function renderHighlighted(html) {
+    document.getElementById('output-container').style.paddingTop = '';
+    const out   = document.getElementById('output-code');
+    const empty = document.getElementById('empty-state');
+    empty.style.display = 'none';
+    out.style.display   = 'block';
+    const lines = html.split('\n');
+    out.innerHTML = lines.map((line, i) =>
+      `<div class="code-line"><div class="line-gutter"><span class="line-num">${i+1}</span><span class="fold-gutter-placeholder"></span></div><div class="line-content">${line}</div></div>`
+    ).join('');
+  }
+
+  // ── FOLD / EXPAND ──
+
+  let _fgCounter = 0;
+
+  function toggleFoldLine(foldId) {
+    const opener = document.querySelector(`.code-line[data-fold-id="${foldId}"]`);
+    if (!opener) return;
+    const btn = opener.querySelector('.fold-gutter-btn');
+    const isOpen = !opener.classList.contains('folded');
+
+    if (isOpen) {
+      opener.classList.add('folded');
+      if (btn) { btn.textContent = '+'; btn.title = 'Expand'; }
+      // Hide all member lines (track which folds hide them)
+      document.querySelectorAll(`#output-code .code-line[data-member-of]`).forEach(el => {
+        if (el.dataset.memberOf.split(' ').includes(foldId)) {
+          const hb = el.dataset.hiddenBy ? el.dataset.hiddenBy.split(' ') : [];
+          if (!hb.includes(foldId)) hb.push(foldId);
+          el.dataset.hiddenBy = hb.join(' ');
+          el.style.display = 'none';
+        }
+      });
+    } else {
+      opener.classList.remove('folded');
+      if (btn) { btn.textContent = '−'; btn.title = 'Collapse'; }
+      // Reveal member lines (only if no other fold is hiding them)
+      document.querySelectorAll(`#output-code .code-line[data-member-of]`).forEach(el => {
+        if (el.dataset.memberOf.split(' ').includes(foldId)) {
+          const hb = (el.dataset.hiddenBy || '').split(' ').filter(id => id && id !== foldId);
+          el.dataset.hiddenBy = hb.join(' ');
+          if (hb.length === 0) el.style.display = '';
+        }
+      });
+    }
+  }
+
+  function expandAll() {
+    const raw = document.getElementById('input-textarea').value.trim();
+    if (!raw) { showToast('Nothing to expand'); return; }
+    formatContent(true);
+    showToast('✓ Expanded');
+  }
+
+  // ── COLLAPSIBLE JSON RENDERER ──
+
+  function jsonPrimitiveHtml(val) {
+    if (val === null)             return '<span class="j-null">null</span>';
+    if (typeof val === 'boolean') return `<span class="j-bool">${val}</span>`;
+    if (typeof val === 'number')  return `<span class="j-num">${val}</span>`;
+    if (typeof val === 'string')  return `<span class="j-str">&quot;${escHtml(val)}&quot;</span>`;
+    return escHtml(String(val));
+  }
+
+  // Builds an array of line-descriptor objects from a parsed JS value.
+  // Each descriptor: { content, peek, foldId, memberOf }
+  function buildJsonLines(value, depth) {
+    const iSize   = currentIndent === 'tab' ? 1 : currentIndent;
+    const iChar   = currentIndent === 'tab' ? '\t' : ' ';
+    const pad     = iChar.repeat(iSize * depth);
+    const padNext = iChar.repeat(iSize * (depth + 1));
+
+    if (value === null || typeof value !== 'object') {
+      return [{ content: jsonPrimitiveHtml(value), peek: null, foldId: null, memberOf: [] }];
+    }
+
+    const isArr   = Array.isArray(value);
+    const entries = isArr ? value.map((v) => [null, v]) : Object.entries(value);
+    const opener  = isArr ? '[' : '{';
+    const closer  = isArr ? ']' : '}';
+    const cls     = isArr ? 'j-bracket' : 'j-brace';
+    const count   = entries.length;
+
+    if (count === 0) {
+      return [{ content: `<span class="${cls}">${opener}${closer}</span>`, peek: null, foldId: null, memberOf: [] }];
+    }
+
+    const fgId    = 'fg' + (_fgCounter++);
+    const summary = isArr
+      ? `${count} item${count !== 1 ? 's' : ''}`
+      : `${count} key${count !== 1 ? 's' : ''}`;
+
+    const lines = [];
+
+    // Opener line
+    lines.push({
+      content : `<span class="${cls}">${opener}</span>`,
+      peek    : `<span class="${cls}">${opener}</span><span class="j-dim"> …${summary}… </span><span class="${cls}">${closer}</span>`,
+      foldId  : fgId,
+      memberOf: [],
+    });
+
+    // Inner entries
+    for (let i = 0; i < entries.length; i++) {
+      const [key, val] = entries[i];
+      const comma  = i < entries.length - 1 ? '<span class="j-comma">,</span>' : '';
+      const keyHtml = key !== null
+        ? `<span class="j-key">&quot;${escHtml(key)}&quot;</span><span class="j-colon">:</span> `
+        : '';
+
+      if (val !== null && typeof val === 'object') {
+        const sub = buildJsonLines(val, depth + 1);
+        sub[0].content = padNext + keyHtml + sub[0].content;
+        if (sub[0].peek) sub[0].peek = padNext + keyHtml + sub[0].peek;
+        sub[sub.length - 1].content += comma;
+        sub.forEach(l => l.memberOf = [...l.memberOf, fgId]);
+        lines.push(...sub);
+      } else {
+        lines.push({ content: `${padNext}${keyHtml}${jsonPrimitiveHtml(val)}${comma}`, peek: null, foldId: null, memberOf: [fgId] });
+      }
+    }
+
+    // Closer line
+    lines.push({ content: `${pad}<span class="${cls}">${closer}</span>`, peek: null, foldId: null, memberOf: [fgId] });
+
+    return lines;
+  }
+
+  function renderCollapsibleJSONLines(parsed) {
+    _fgCounter = 0;
+    const lines = buildJsonLines(parsed, 0);
+    const out   = document.getElementById('output-code');
+    const empty = document.getElementById('empty-state');
+    document.getElementById('output-container').style.paddingTop = '';
+    empty.style.display = 'none';
+    out.style.display   = 'block';
+    out.innerHTML = lines.map((ln, i) => {
+      const lineNum    = i + 1;
+      const memberAttr = ln.memberOf.length ? ` data-member-of="${ln.memberOf.join(' ')}"` : '';
+      const foldAttr   = ln.foldId ? ` data-fold-id="${ln.foldId}"` : '';
+      const gutterBtn  = ln.foldId
+        ? `<button class="fold-gutter-btn" onclick="toggleFoldLine('${ln.foldId}')" title="Collapse">−</button>`
+        : `<span class="fold-gutter-placeholder"></span>`;
+      const normal = `<span class="line-normal">${ln.content}</span>`;
+      const peek   = ln.peek ? `<span class="line-peek">${ln.peek}</span>` : '';
+      return `<div class="code-line"${foldAttr}${memberAttr}><div class="line-gutter"><span class="line-num">${lineNum}</span>${gutterBtn}</div><div class="line-content">${normal}${peek}</div></div>`;
+    }).join('');
+  }
+
+  // ── COLLAPSIBLE TEXT RENDERER (YAML, HTML, GraphQL, XML) ──
+  // hlLineFn receives one raw line and returns highlighted HTML for it.
+  function renderCollapsibleTextLines(rawText, hlLineFn) {
+    _fgCounter = 0;
+    const allLines = rawText.split('\n');
+    let lineNum = 0;
+
+    function getIndent(line) {
+      const m = line.match(/^(\s*)/);
+      return m ? m[1].length : 0;
+    }
+
+    // Returns array of complete <div class="code-line"> strings
+    function processBlock(arr, outerGroups) {
+      const rows = [];
+      let i = 0;
+      while (i < arr.length) {
+        const line = arr[i];
+        lineNum++;
+        const curNum = lineNum;
+
+        if (!line.trim()) {
+          rows.push(`<div class="code-line"><div class="line-gutter"><span class="line-num">${curNum}</span><span class="fold-gutter-placeholder"></span></div><div class="line-content"></div></div>`);
+          i++;
+          continue;
+        }
+
+        const myIndent = getIndent(line);
+        let j = i + 1;
+        while (j < arr.length && !arr[j].trim()) j++;
+        const childIndent = j < arr.length ? getIndent(arr[j]) : -1;
+        const hasChildren = childIndent > myIndent;
+
+        if (hasChildren) {
+          // Find where the child block ends
+          let k = j;
+          while (k < arr.length) {
+            if (!arr[k].trim()) { k++; continue; }
+            if (getIndent(arr[k]) <= myIndent) break;
+            k++;
+          }
+          const childArr = arr.slice(j, k);
+          const fgId = 'fg' + (_fgCounter++);
+          const allGroups = [...outerGroups, fgId]; // not used for opener, but for children
+
+          const nonEmpty = childArr.filter(l => l.trim()).length;
+          const peekText = `…${nonEmpty} line${nonEmpty !== 1 ? 's' : ''}…`;
+          const normalHtml = hlLineFn(line);
+          const peekHtml   = normalHtml + `<span class="j-dim"> ${escHtml(peekText)}</span>`;
+
+          const memberAttr = outerGroups.length ? ` data-member-of="${outerGroups.join(' ')}"` : '';
+          rows.push(`<div class="code-line" data-fold-id="${fgId}"${memberAttr}><div class="line-gutter"><span class="line-num">${curNum}</span><button class="fold-gutter-btn" onclick="toggleFoldLine('${fgId}')" title="Collapse">−</button></div><div class="line-content"><span class="line-normal">${normalHtml}</span><span class="line-peek">${peekHtml}</span></div></div>`);
+
+          // Process children (they belong to fgId + outerGroups)
+          const childRows = processBlock(childArr, [fgId, ...outerGroups]);
+          rows.push(...childRows);
+
+          i = k;
+        } else {
+          const memberAttr = outerGroups.length ? ` data-member-of="${outerGroups.join(' ')}"` : '';
+          rows.push(`<div class="code-line"${memberAttr}><div class="line-gutter"><span class="line-num">${curNum}</span><span class="fold-gutter-placeholder"></span></div><div class="line-content">${hlLineFn(line)}</div></div>`);
+          i++;
+        }
+      }
+      return rows;
+    }
+
+    const rows = processBlock(allLines, []);
+    const out   = document.getElementById('output-code');
+    const empty = document.getElementById('empty-state');
+    document.getElementById('output-container').style.paddingTop = '';
+    empty.style.display = 'none';
+    out.style.display   = 'block';
+    out.innerHTML = rows.join('');
   }
 
   // ── SYNTAX HIGHLIGHTERS ──
@@ -968,17 +1413,6 @@
   }
 
   // ── RENDER ──
-  function renderHighlighted(html) {
-    const out   = document.getElementById('output-code');
-    const empty = document.getElementById('empty-state');
-    empty.style.display = 'none';
-    out.style.display   = 'block';
-    // Add line numbers
-    const lines = html.split('\n');
-    out.innerHTML = lines.map((line, i) =>
-      `<span class="line-num">${i+1}</span>${line}`
-    ).join('\n');
-  }
 
   function showEmpty() {
     document.getElementById('empty-state').style.display = 'flex';
@@ -1055,14 +1489,67 @@
   }
 
   function minifyOutput() {
-    if (currentLang === 'json' || currentLang === 'json-string') {
-      if (!currentParsed) { showToast('Nothing to minify'); return; }
-      const minified = JSON.stringify(currentParsed);
-      document.getElementById('input-textarea').value = minified;
-      formatContent();
-      showToast('Minified ↓');
-    } else {
-      showToast('Minify is available for JSON only');
+    if (!currentFormatted) { showToast('Nothing to minify'); return; }
+    let minified = '';
+    try {
+      switch (currentLang) {
+        case 'json':
+        case 'json-string':
+        case 'gql-to-json':
+          if (!currentParsed) { showToast('Nothing to minify'); return; }
+          minified = JSON.stringify(currentParsed);
+          break;
+        case 'javascript':
+        case 'typescript':
+          minified = currentFormatted
+            .replace(/\/\/[^\n]*/g, '')
+            .replace(/\/\*[\s\S]*?\*\//g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+          break;
+        case 'css':
+          minified = currentFormatted
+            .replace(/\/\*[\s\S]*?\*\//g, '')
+            .replace(/\s+/g, ' ')
+            .replace(/\s*([{};:,>~+])\s*/g, '$1')
+            .trim();
+          break;
+        case 'html':
+          minified = currentFormatted
+            .replace(/<!--(?!\[)[\s\S]*?-->/g, '')
+            .replace(/\s+/g, ' ')
+            .replace(/>\s+</g, '><')
+            .trim();
+          break;
+        case 'graphql':
+          minified = currentFormatted
+            .replace(/#[^\n]*/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+          break;
+        case 'xml': {
+          const rawXml = document.getElementById('input-textarea').value.trim();
+          minified = rawXml.replace(/>\s+</g, '><').replace(/\s+/g, ' ').trim();
+          break;
+        }
+        case 'yaml':
+          showToast('YAML minify not applicable');
+          return;
+        case 'jwt':
+          showToast('JWT cannot be minified');
+          return;
+        default:
+          showToast('Minify not supported for this format');
+          return;
+      }
+      if (!minified) { showToast('Nothing to minify'); return; }
+      currentFormatted = minified;
+      showOutput(`<div class="code-line"><div class="line-gutter"><span class="line-num">1</span><span class="fold-gutter-placeholder"></span></div><div class="line-content">${escHtml(minified)}</div></div>`);
+      const bytes = new Blob([minified]).size;
+      setStatus('valid', '✓ Minified', '', formatBytes(bytes));
+      showToast('✓ Minified!');
+    } catch(e) {
+      showToast('⚠ Minify failed');
     }
   }
 
